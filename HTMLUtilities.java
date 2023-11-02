@@ -25,36 +25,55 @@ public class HTMLUtilities {
 			tempToken += str.charAt(i);
 			// is the token a tag
 			if (checkTag(tempToken)) isComplete = true;
-			// only run the rest if it doesnt start with <
+			// only run the rest if tempToken doesnt start with <
 			if (tempToken.charAt(0) != '<') {
-				// check if space is next
-				if (i < str.length() - 1 && str.charAt(i + 1) == ' ') 
-					isComplete = true;
 				/* check if hyphen is next, but not if letter before 
 				 * and after or if before an int*/
 				if (i < str.length() - 1 && str.charAt(i + 1) == '-'
-							&& !Character.isLetterOrDigit(str.charAt(i + 1)) 
-							&& !Character.isLetter(str.charAt(i - 1)))
+							&& !Character.isLetterOrDigit(str.charAt(i + 2)) 
+							&& !Character.isLetter(str.charAt(i)))
 					isComplete = true;
 				// check if . is between 2 numbers
-				if (i < str.length() - 1 && str.charAt(i + 1) == '.' 
-							&& (Character.isDigit(str.charAt(i + 1)) 
-							|| Character.isDigit(str.charAt(i - 1))))
+				if (i < str.length() - 2 && str.charAt(i + 1) == '.' 
+							&& Character.isDigit(str.charAt(i)) 
+							&& Character.isDigit(str.charAt(i + 2)))
 					isComplete = false;
+				/* check if . is after a letter or num, but before a 
+				 * non-letter/non-num */
+				if (i < str.length() - 2 && str.charAt(i + 1) == '.' 
+							&& Character.isLetterOrDigit(str.charAt(i)) 
+							&& !Character.isLetterOrDigit(str.charAt(i + 2)))
+					isComplete = true;
+				if (i == str.length() - 2 && str.charAt(i + 1) == '.')
+					isComplete = true;
 				// check if next char is non-hyphen punctuation
 				if (i < str.length() - 1 && isPunctuation(str.charAt(i + 1)))
 					isComplete = true;
 				// check if temp is a single punctuation
 				if (tempToken.length() == 1 && isPunctuation(tempToken.charAt(0)))
 					isComplete = true;
+				// check if next char is a <
+				if (i < str.length() - 1 && str.charAt(i + 1) == '<')
+					isComplete = true;
+				// check if space is next
+				if (i < str.length() - 1 && str.charAt(i + 1) == ' ') 
+					isComplete = true;
+				// check if tab is next
+				if (i < str.length() - 1 && str.charAt(i + 1) == '\t') 
+					isComplete = true;
+				// check to see if current char is a space
+				if (tempToken.length() == 1 && tempToken.charAt(0) == ' ')
+					isComplete = true;
 			}
 			// check if it is the last char
 			if (i == str.length() - 1) isComplete = true;
 			// if the token is valid, add it to result and clear temp
 			if (isComplete) {
-				result[tokenNum] = tempToken;
+				if (tempToken.length() != 1 || tempToken.charAt(0) != ' ') {
+					result[tokenNum] = tempToken.trim();
+					tokenNum ++;
+				}
 				tempToken = "";
-				tokenNum ++;
 				isComplete = false;
 			}
 		}
