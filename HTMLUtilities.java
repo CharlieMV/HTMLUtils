@@ -5,7 +5,10 @@
  *	@since	October 31, 2023
  */
 public class HTMLUtilities {
-
+	/* the stat of the tokenizer. was there a comment in or <pre> 
+	 * before that hasn't been closed */
+	private enum tokenizerState {NONE, COMMENT, PRE};
+	private tokenizerState state = tokenizerState.NONE;
 	/**
 	 *	Break the HTML string into tokens. The array returned is
 	 *	exactly the size of the number of tokens in the HTML string.
@@ -17,65 +20,74 @@ public class HTMLUtilities {
 	public String[] tokenizeHTMLString (String str) {
 		// make the size of the array large to start
 		String[] result = new String[10000];
+		// where along the token array we are
 		int tokenNum = 0;
+		// keep track of str from last tag to counter
 		String tempToken = "";
+		// is the token complete?
 		boolean isComplete = false;
-		// scan all characters while scanning next for spaces
-		for (int i = 0; i < str.length(); i++) {
-			tempToken += str.charAt(i);
-			// is the token a tag
-			if (checkTag(tempToken)) isComplete = true;
-			// only run the rest if tempToken doesnt start with <
-			if (tempToken.charAt(0) != '<') {
-				/* check if hyphen is next, but not if letter before 
-				 * and after or if before an int*/
-				if (i < str.length() - 1 && str.charAt(i + 1) == '-'
-							&& !Character.isLetterOrDigit(str.charAt(i + 2)) 
-							&& !Character.isLetter(str.charAt(i)))
-					isComplete = true;
-				// check if . is between 2 numbers
-				if (i < str.length() - 2 && str.charAt(i + 1) == '.' 
-							&& Character.isDigit(str.charAt(i)) 
-							&& Character.isDigit(str.charAt(i + 2)))
-					isComplete = false;
-				/* check if . is after a letter or num, but before a 
-				 * non-letter/non-num */
-				if (i < str.length() - 2 && str.charAt(i + 1) == '.' 
-							&& Character.isLetterOrDigit(str.charAt(i)) 
-							&& !Character.isLetterOrDigit(str.charAt(i + 2)))
-					isComplete = true;
-				if (i == str.length() - 2 && str.charAt(i + 1) == '.')
-					isComplete = true;
-				// check if next char is non-hyphen punctuation
-				if (i < str.length() - 1 && isPunctuation(str.charAt(i + 1)))
-					isComplete = true;
-				// check if temp is a single punctuation
-				if (tempToken.length() == 1 && isPunctuation(tempToken.charAt(0)))
-					isComplete = true;
-				// check if next char is a <
-				if (i < str.length() - 1 && str.charAt(i + 1) == '<')
-					isComplete = true;
-				// check if space is next
-				if (i < str.length() - 1 && str.charAt(i + 1) == ' ') 
-					isComplete = true;
-				// check if tab is next
-				if (i < str.length() - 1 && str.charAt(i + 1) == '\t') 
-					isComplete = true;
-				// check to see if current char is a space
-				if (tempToken.length() == 1 && tempToken.charAt(0) == ' ')
-					isComplete = true;
+		// where along str we are
+		int counter = 0;
+		// comment edge cases
+		boolean isCommEdgeCase = false;
+		
+		// Check for pre
+		// check to see if code is preformatted
+			if (str.indexOf("<pre>") != -1) {
+				state = tokenizerState.PRE;
 			}
-			// check if it is the last char
-			if (i == str.length() - 1) isComplete = true;
+			// check for end of preformatting
+			if (str.indexOf("</pre>") != -1) {
+				state = tokenizerState.NONE;
+			}
+			if (state == tokenizerState.PRE) {
+				result[0] = str;
+				return result;
+			}
+		
+		// scan all characters while scanning next for spaces
+		while (counter < str.length()) {
+			tempToken += str.charAt(counter);
+			// is the token an html tag
+			if (checkTag(tempToken)) isComplete = true;
+			
+			// check to see if a comment has started
+			if (tempToken.trim().indexOf("<!--") == 0) { 
+				state = tokenizerState.COMMENT;
+			}
+			// check to see of the comment has ended
+			if (tempToken.trim().indexOf("-->") >= 0 && state == 
+											tokenizerState.COMMENT) {
+				isCommEdgeCase = true;
+			}
+			
+			/* only check for the rest of the cases if tempToken doesnt 
+			 * start with < and state is not COMMENT */
+			else if (tempToken.charAt(0) != '<' && state != tokenizerState.COMMENT) {
+				isComplete = isFullToken(str, counter, tempToken);
+			}
+			// check if it is the last char of str
+			if (counter == str.length() - 1) isComplete = true;
+			
 			// if the token is valid, add it to result and clear temp
 			if (isComplete) {
-				if (tempToken.length() != 1 || tempToken.charAt(0) != ' ') {
+				/* do not count the token if it is not just a whitespace 
+				 * or tokenizerState is COMMENT */
+				if ((tempToken.length() != 1 || 
+						!Character.isWhitespace(tempToken.charAt(0))) && 
+						state != tokenizerState.COMMENT) {
 					result[tokenNum] = tempToken.trim();
 					tokenNum ++;
+				}
+				// Check edge cases
+				if (isCommEdgeCase) {
+					state = tokenizerState.NONE;
+					isCommEdgeCase = false;
 				}
 				tempToken = "";
 				isComplete = false;
 			}
+			counter ++;
 		}
 		// return the correctly sized array
 		return result;
@@ -124,5 +136,62 @@ public class HTMLUtilities {
 			return true; 
 			default: return false;
 		}
+	}
+	/**
+	 * Checks for all possible tokens, and return whether to end token 
+	 * or keep scanning
+	 * 
+	 * @param str			string to tokenize
+	 * @param counter		int to keep track of wehre along the str we are
+	 * @param temptoken		string from the last token to where counter
+	 * @return				boolean true if there tempToken is a token
+	 */
+	private boolean isFullToken (String str, int counter, String tempToken) {
+		/* keep as boolean as some cases may overlap, so a false might turn 
+		 * into a true after considring other cases */
+		boolean isComplete = false;
+		/* check if hyphen is next, but not if letter before 
+		 * and after or if before an int*/
+		if (counter < str.length() - 1 && str.charAt(counter + 1) == '-'
+					&& !Character.isLetterOrDigit(str.charAt(counter + 2)) 
+					&& !Character.isLetter(str.charAt(counter)))
+			isComplete = true;
+		// check if . is between 2 numbers
+		if (counter < str.length() - 2 && str.charAt(counter + 1) == '.' 
+					&& Character.isDigit(str.charAt(counter)) 
+					&& Character.isDigit(str.charAt(counter + 2)))
+			isComplete = false;
+		/* check if . is after a letter or num, but before a 
+		 * non-letter/non-num */
+		if (counter < str.length() - 2 && str.charAt(counter + 1) == '.' 
+					&& Character.isLetterOrDigit(str.charAt(counter)) 
+					&& !Character.isLetterOrDigit(str.charAt(counter + 2)))
+			isComplete = true;
+		if (counter == str.length() - 2 && str.charAt(counter + 1) == '.')
+			isComplete = true;
+		// check if next char is non-hyphen punctuation
+		if (counter< str.length() - 1 && isPunctuation(str.charAt(counter + 1)))
+			isComplete = true;
+		// check if temp is a single punctuation
+		if (tempToken.length() == 1 && isPunctuation(tempToken.charAt(0)))
+			isComplete = true;
+		// check if next char is a <
+		if (counter < str.length() - 1 && str.charAt(counter + 1) == '<')
+			isComplete = true;
+		// check if space is next
+		if (counter < str.length() - 1 && str.charAt(counter + 1) == ' ') 
+			isComplete = true;
+		// check if tab is next
+		if (counter < str.length() - 1 && str.charAt(counter + 1) == '\t') 
+			isComplete = true;
+		// check to see if current char is a space
+		if (tempToken.length() == 1 && tempToken.charAt(0) == ' ')
+			isComplete = true;
+		// check if current is - and .digit is next
+		if (counter < str.length() - 3 && str.charAt(counter) == '-' &&
+					str.charAt(counter + 1) == '.' && 
+					Character.isDigit(str.charAt(counter + 2)))
+			isComplete = false;
+		return isComplete;
 	}
 }
